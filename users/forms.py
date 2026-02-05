@@ -3,7 +3,8 @@ from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.models import User
 from .models import Profile
 
-class UserRegistrationForm(UserCreationForm):
+class UserRegisterForm(UserCreationForm):
+    username = forms.CharField(max_length=150, required=True, label="Username")
     email = forms.EmailField(required=True, label="Email")
     first_name = forms.CharField(max_length=30, required=True)
     surname = forms.CharField(max_length=30, required=True, label="Last name")
@@ -11,13 +12,13 @@ class UserRegistrationForm(UserCreationForm):
 
     class Meta:
         model = User
-        # No 'username' here — we set it from email in save()
-        fields = ['email', 'password1', 'password2', 'first_name']
+        # include username so a separate username field appears in the form
+        fields = ['username', 'email', 'password1', 'password2', 'first_name']
 
     def clean_email(self):
         email = self.cleaned_data['email'].strip().lower()
-        # since username = email, ensure no existing username/email matches
-        if User.objects.filter(username__iexact=email).exists():
+        # ensure email is unique (username is now separate)
+        if User.objects.filter(email__iexact=email).exists():
             raise forms.ValidationError("An account with this email already exists.")
         return email
 
@@ -32,8 +33,9 @@ class UserRegistrationForm(UserCreationForm):
 
     def save(self, commit=True):
         user = super().save(commit=False)
+        username = self.cleaned_data['username'].strip()
         email = self.cleaned_data['email'].strip().lower()
-        user.username = email            # username mirrors email
+        user.username = username           # use the provided username for login
         user.email = email
         user.first_name = self.cleaned_data['first_name']
         user.last_name = self.cleaned_data['surname']
@@ -59,11 +61,4 @@ class EmailAuthenticationForm(AuthenticationForm):
     
     def confirm_login_allowed(self, user):
         super().confirm_login_allowed(user)
-
-class UserRegisterForm(UserCreationForm):
-    username = forms.CharField(max_length=100, required=True, help_text='Required.')
-    email = forms.EmailField(required=True)
-    
-    class Meta:
-        model = User
-        fields = ['username', 'email', 'password1', 'password2']
+        # Additional checks can be added here if needed
