@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
 
 class Group(models.Model):
     name = models.CharField(max_length=100)
@@ -26,7 +27,6 @@ class Comment(models.Model):
     def __str__(self):
         return f"{self.user.username}: {self.content[:20]}..."  # Show only first 20 chars for preview
     
-
 class Event(models.Model):
 
     class Status(models.TextChoices):
@@ -37,22 +37,37 @@ class Event(models.Model):
     name = models.CharField(max_length=100)
     date = models.DateField()
     total_spend = models.DecimalField(max_digits=10, decimal_places=2)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,)
     archived_at = models.DateTimeField(null=True, blank=True)
     group = models.ForeignKey(Group, related_name='events', on_delete=models.CASCADE)
     members = models.ManyToManyField(User, related_name='event_memberships')
 
     def calculate_share(self):
-        members_count = self.members.count()
-        if members_count == 0:
-            return 0
-        return self.total_spend / members_count
+        members_count = self.group.members.count()
+        return 0 if members_count == 0 else self.total_spend / members_count
 
-    def check_status(self):
+    def check_status(self, save=True):
+        if self.status == self.Status.ARCHIVED:
+            return self.status
         share = self.calculate_share()
-        for member in self.members.all():
+        for member in self.group.members.all():
             if member.profile.max_spend < share:
                 self.status = self.Status.PENDING
-                return False
+                if save:
+                    self.save(update_fields=["status"])
+                return self.status
         self.status = self.Status.ACTIVE
-        return True   
+        if save:
+            self.save(update_fields=["status"])
+        return self.status
+    
+    def archive(self, save=True):
+        self.status = self.Status.ARCHIVED
+        self.archived_at = timezone.now()
+        if save:
+            self.save(update_fields=["status", "archived_at"])
+    

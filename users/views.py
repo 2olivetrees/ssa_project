@@ -108,4 +108,3 @@ def top_up(request):
     'balance': request.user.profile.balance,}   
     return render(request, 'users/top_up.html', context)
 
-
