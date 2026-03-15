@@ -2,6 +2,10 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.models import User
+from urllib3 import request
+
+from users.forms import TopUpForm
+from users.models import Transaction
 from .models import Group, GroupJoinRequest, Comment, Event
 from .forms import GroupCreationForm, CommentForm
 
@@ -28,12 +32,14 @@ def delete_comment(request, comment_id):
 
 @login_required
 def home(request):
+    profile = request.user.profile
     user = request.user
     pending_invitations = user.pending_invitations.all() # Get pending group invitations for the current user
     user_groups = user.group_memberships.all()  # Get groups the user is a member of
     user_join_requests = GroupJoinRequest.objects.filter(user=user)  # Get join requests sent by the user
     available_groups = Group.objects.exclude(members=user).exclude(join_requests__user=user) # Get groups the user is not a member of and the user has not requested to join
     context = {
+        'balance': profile.balance,
         'pending_invitations': pending_invitations,
         'user_groups': user_groups,
         'user_join_requests': user_join_requests,
@@ -332,7 +338,20 @@ def vote_on_join_request(request, group_id, request_id, vote):
         for event in group.events.all():
             event.check_status()
             event.save()
-            
+
         join_request.save()
         messages.success(request, f"{join_request.user.profile.nickname} has been approved to join the group!") 
     return redirect('chipin:group_detail', group_id=group.id)
+
+@login_required
+def profile(request):
+    if request.method == "POST":
+        balance = request.POST.get("balance")
+        if balance:
+                balance = float(balance)
+                request.user.profile.balance = balance
+                request.user.profile.save(update_fields=["balance"])
+                messages.success(request, "Profile updated successfully.")
+                return redirect('users:profile')
+    return render(request, 'users/profile.html')
+

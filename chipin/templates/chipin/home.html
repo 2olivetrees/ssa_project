@@ -61,4 +61,6 @@
         <li>No groups available to join.</li>
         {% endfor %}
     </ul>
+    <h2>Current Balance: ${{ balance }}</h2>
+    <a href="{% url 'users:top_up' %}">Top Up Balance</a>
 {% endblock %}
