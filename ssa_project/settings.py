@@ -15,6 +15,11 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django_otp',
+    'django_otp.plugins.otp_totp',    
+    'django_otp.plugins.otp_static',  
+    'two_factor',
+
 ]
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -24,14 +29,18 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_otp.middleware.OTPMiddleware',
+
 ]
 ROOT_URLCONF = 'ssa_project.urls'
-TEMPLATES = [{
-'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+TEMPLATES = [
+    {
+        'BACKEND': 'django.template.backends.django.DjangoTemplates',
+        'DIRS': [ BASE_DIR / 'templates' ],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
+                'django.template.context_processors.debug',
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
@@ -40,6 +49,11 @@ TEMPLATES = [{
             ],},
 },]
 WSGI_APPLICATION = 'ssa_project.wsgi.application'
+
+LOGIN_URL = 'users:login'
+LOGIN_REDIRECT_URL = 'chipin:home'
+LOGOUT_REDIRECT_URL = 'users:login'
+
 DATABASES = {'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',

@@ -3,6 +3,7 @@ from . import views
 
 urlpatterns = [
    path("", views.home, name="home"),
+   path('sensitive/', views.sensitive_area, name='sensitive'), 
    path('create_group/', views.create_group, name='create_group'),
    path('group/<int:group_id>/', views.group_detail, name='group_detail'),
    path('group/<int:group_id>/invite/', views.invite_users, name='invite_users'),

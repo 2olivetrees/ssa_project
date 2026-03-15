@@ -2,7 +2,6 @@ from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.models import User
-from urllib3 import request
 from decimal import Decimal
 from django.db import transaction
 from django.db.models import F
@@ -10,9 +9,15 @@ from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.contrib import messages
 from users.forms import TopUpForm
-from users.models import Transaction
-from .models import Group, GroupJoinRequest, Comment, Event 
+from .models import Group, GroupJoinRequest, Comment, Event, Transaction
 from .forms import GroupCreationForm, CommentForm
+from django_otp import devices_for_user
+from django_otp.decorators import otp_required  
+
+
+@otp_required
+def sensitive_area(request):
+    return render(request, "chipin/sensitive.html")
 
 @login_required
 def edit_comment(request, comment_id):
@@ -37,6 +42,14 @@ def delete_comment(request, comment_id):
 
 @login_required
 def home(request):
+    has_device = any(devices_for_user(request.user, for_verify=True))
+    is_verified = False
+    if hasattr(request.user, "is_verified"):
+        try:
+            is_verified = bool(request.user.is_verified())
+        except TypeError:
+            is_verified = bool(request.user.is_verified)
+
     profile = request.user.profile
     user = request.user
     pending_invitations = user.pending_invitations.all() # Get pending group invitations for the current user
@@ -53,6 +66,9 @@ def home(request):
         'user_join_requests': user_join_requests,
         'available_groups': available_groups,
         'transactions': transactions,
+        "has_device": has_device,
+        "is_verified": is_verified,
+        "user": request.user,
     }
     return render(request, 'chipin/home.html', context)
 
@@ -369,74 +385,79 @@ def transfer_funds(request, group_id, event_id):
     if request.method != "POST":
         messages.error(request, "Invalid request method.")
         return redirect('chipin:group_detail', group_id=group_id)
-    else:
-        event = get_object_or_404(Event, id=event_id, group_id=group_id)
-        group = event.group
-        if request.user != group.admin:
-            messages.error(request, "Only the group admin can transfer funds.")
-            return redirect('chipin:group_detail', group_id=group_id)
-        payers_qs = event.members.select_related("profile")
-        if not payers_qs.exists():
-            payers_qs = group.members.select_related("profile")
-            payers = list(payers_qs)
-        #include admin
-        include_admin_in_payers = True
-        if include_admin_in_payers and group.admin not in payers:
-            payers.append(group.admin)
+    
+    event = get_object_or_404(Event, id=event_id, group_id=group_id)
+    group = event.group
+    if event.funds_transferred:
+        #messages.error(request, "Funds have already been transferred for this event.")
+        return redirect('chipin:group_detail', group_id=group_id)
 
-        if not payers:
-            messages.error(request, "No payers found for this event.")
-            return redirect('chipin:group_detail', group_id=group_id)
-        rough_eligible = [u for u in payers if u.profile.balance > 0]
-        if not rough_eligible:
-            messages.error(request, "No members have a positive balance to contribute.")
-            return redirect('chipin:group_detail', group_id=group_id)
-        #recalculate share using roughly eligible members
-        share = event.total_spend / Decimal(len(rough_eligible))
-        #second pass, final eligibility check
-        final_payers = []
-        excluded = []
-        for u in rough_eligible:
-            if u.profile.balance >= share:
-                final_payers.append(u)
-            else:
-                excluded.append(u)
-        if not final_payers:
-            messages.error(request, "No participants could afford the share amount. Transfer cancelled.")
-            return redirect('chipin:group_detail', group_id=group_id)
-        final_share = event.total_spend / Decimal(len(final_payers))
-        with transaction.atomic():
-            #debit the final eligible payers
-            for u in final_payers:
-                u.profile.balance = F("balance") - final_share
-                u.profile.save(update_fields=["balance"])
-                Transaction.objects.create(
-                    user=u,
-                    amount=-final_share,
-                    created_at=timezone.now(),
-                    description=f"Contribution for event '{event.name}'")
-            #credit admin with full event spend
-            admin_profile = group.admin.profile
-            admin_profile.balance = F("balance") + event.total_spend
-            admin_profile.save(update_fields=["balance"])
+    if request.user != group.admin:
+        messages.error(request, "Only the group admin can transfer funds.")
+        return redirect('chipin:group_detail', group_id=group_id)
+    payers_qs = event.members.select_related("profile")
+    if not payers_qs.exists():
+        payers_qs = group.members.select_related("profile")
+    payers = list(payers_qs)
+    #include admin
+    include_admin_in_payers = True
+    if include_admin_in_payers and group.admin not in payers:
+        payers.append(group.admin)
+
+    if not payers:
+        messages.error(request, "No payers found for this event.")
+        return redirect('chipin:group_detail', group_id=group_id)
+    rough_eligible = [u for u in payers if u.profile.balance > 0]
+    if not rough_eligible:
+        messages.error(request, "No members have a positive balance to contribute.")
+        return redirect('chipin:group_detail', group_id=group_id)
+    #recalculate share using roughly eligible members
+    share = event.total_spend / Decimal(len(rough_eligible))
+    #second pass, final eligibility check
+    final_payers = []
+    excluded = []
+    for u in rough_eligible:
+        if u.profile.balance >= share:
+            final_payers.append(u)
+        else:
+            excluded.append(u)
+    if not final_payers:
+        messages.error(request, "No participants could afford the share amount. Transfer cancelled.")
+        return redirect('chipin:group_detail', group_id=group_id)
+    final_share = event.total_spend / Decimal(len(final_payers))
+    with transaction.atomic():
+        #debit the final eligible payers
+        for u in final_payers:
+            u.profile.balance = F("balance") - final_share
+            u.profile.save(update_fields=["balance"])
             Transaction.objects.create(
-                user=group.admin,
-                amount=event.total_spend,
+                user=u,
+                amount=-final_share,
                 created_at=timezone.now(),
-                description=f"Funds recieved for event '{event.name}'"
-            )
-            #archive event
-            event.status = Event.Status.ARCHIVED
-            event.archived_at = timezone.now()
-            event.save(update_fields=["status", "archived_at"])
-            msg = (
-                f"Transferred ${event.total_spend} "
-                f"(${final_share:.2f} each)"
-                f"from {len(final_payers)} payer(s)."
-            )
+                description=f"Contribution for event '{event.name}'")
+        #credit admin with full event spend
+        admin_profile = group.admin.profile
+        admin_profile.balance = F("balance") + event.total_spend
+        admin_profile.save(update_fields=["balance"])
+        Transaction.objects.create(
+            user=group.admin,
+            amount=event.total_spend,
+            created_at=timezone.now(),
+            description=f"Funds recieved for event '{event.name}'"
+        )
+        #archive event
+        event.status = Event.Status.ARCHIVED
+        event.funds_transferred = True
+        event.archived_at = timezone.now()
+        event.save(update_fields=["status", "archived_at"])
+        msg = (
+            f"Transferred ${event.total_spend} "
+            f"(${final_share:.2f} each)"
+            f"from {len(final_payers)} payer(s)."
+        )
 
-            if excluded:
-                excluded_names = ", ".join(u.username for u in excluded)
-                msg += f" Excluded due to insufficient balance: {excluded_names}."
-            messages.success(request, msg)
-            return redirect('chipin:group_detail', group_id=group_id)
+        if excluded:
+            excluded_names = ", ".join(u.username for u in excluded)
+            msg += f" Excluded due to insufficient balance: {excluded_names}."
+        messages.success(request, msg)
+        return redirect('chipin:group_detail', group_id=group_id)

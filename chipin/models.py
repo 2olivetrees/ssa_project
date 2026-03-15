@@ -45,6 +45,7 @@ class Event(models.Model):
     archived_at = models.DateTimeField(null=True, blank=True)
     group = models.ForeignKey(Group, related_name='events', on_delete=models.CASCADE)
     members = models.ManyToManyField(User, related_name='event_memberships')
+    funds_transferred = models.BooleanField(default=False)
 
     def calculate_share(self):
         members_count = self.group.members.count()
@@ -71,3 +72,11 @@ class Event(models.Model):
         if save:
             self.save(update_fields=["status", "archived_at"])
     
+class Transaction (models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    created_at = models.DateTimeField(auto_now_add=True)
+    description = models.CharField(max_length=255, blank=True)
+
+    def __str__(self):
+        return f"{self.user.username} - ${self.amount}"

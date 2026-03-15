@@ -51,7 +51,7 @@ class UserRegistrationForm(UserCreationForm):
         return user
 
 
-class EmailAuthenticationForm(AuthenticationForm):
+class AuthenticationForm(AuthenticationForm):
     username = forms.CharField(
         label="Email or Username",
         widget=forms.TextInput(attrs={"autofocus": True})

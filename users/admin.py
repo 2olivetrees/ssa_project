@@ -28,4 +28,4 @@ class ProfileAdmin(admin.ModelAdmin):
     def user_first_name(self, obj): return obj.user.first_name
     def user_last_name(self, obj): return obj.user.last_name
     def user_email(self, obj): return obj.user.email
-    def user_balance(self, obj): return obj.user.balance
+    def user_balance(self, obj): return obj.balance
