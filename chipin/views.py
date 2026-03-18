@@ -8,7 +8,6 @@ from django.db.models import F
 from django.shortcuts import get_object_or_404, redirect
 from django.utils import timezone
 from django.contrib import messages
-from users.forms import TopUpForm
 from .models import Group, GroupJoinRequest, Comment, Event, Transaction
 from .forms import GroupCreationForm, CommentForm
 from django_otp import devices_for_user
