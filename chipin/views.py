@@ -111,8 +111,6 @@ def group_detail(request, group_id, edit_comment_id=None):
     # Calculate event share for each event and check user eligibility
     event_share_info = {}
     for event in events:
-        print(f"DEBUG group_detail: event={event.name}, event members={list(event.members.values_list('id', flat=True))}, group members={list(group.members.values_list('id', flat=True))}")
-
         event_share = event.calculate_share()
         user_eligible = request.user.profile.max_spend >= event_share
         user_has_joined = request.user in event.members.all()  # Check if the user has already joined the event
