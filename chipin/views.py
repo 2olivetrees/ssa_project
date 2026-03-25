@@ -111,6 +111,8 @@ def group_detail(request, group_id, edit_comment_id=None):
     # Calculate event share for each event and check user eligibility
     event_share_info = {}
     for event in events:
+        print(f"DEBUG group_detail: event={event.name}, event members={list(event.members.values_list('id', flat=True))}, group members={list(group.members.values_list('id', flat=True))}")
+
         event_share = event.calculate_share()
         user_eligible = request.user.profile.max_spend >= event_share
         user_has_joined = request.user in event.members.all()  # Check if the user has already joined the event
@@ -300,7 +302,6 @@ def leave_group(request, group_id):
     messages.success(request, f'You left "{group.name}".')
     return redirect("chipin:home")
 
-
 @login_required
 def request_to_join_group(request, group_id):
     group = get_object_or_404(Group, id=group_id)
@@ -366,18 +367,6 @@ def vote_on_join_request(request, group_id, request_id, vote):
         join_request.save()
         messages.success(request, f"{join_request.user.profile.nickname} has been approved to join the group!") 
     return redirect('chipin:group_detail', group_id=group.id)
-
-@login_required
-def profile(request):
-    if request.method == "POST":
-        balance = request.POST.get("balance")
-        if balance:
-                balance = float(balance)
-                request.user.profile.balance = balance
-                request.user.profile.save(update_fields=["balance"])
-                messages.success(request, "Profile updated successfully.")
-                return redirect('users:profile')
-    return render(request, 'users/profile.html')
 
 @login_required
 def transfer_funds(request, group_id, event_id):

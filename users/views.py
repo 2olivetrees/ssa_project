@@ -173,3 +173,14 @@ def top_up(request):
     'balance': request.user.profile.balance}   
     return render(request, 'users/top_up.html', context)
 
+@login_required
+def profile(request):
+    if request.method == "POST":
+        balance = request.POST.get("balance")
+        if balance:
+                balance = float(balance)
+                request.user.profile.balance = balance
+                request.user.profile.save(update_fields=["balance"])
+                messages.success(request, "Profile updated successfully.")
+                return redirect('users:profile')
+    return render(request, 'users/profile.html')

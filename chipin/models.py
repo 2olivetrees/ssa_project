@@ -26,7 +26,7 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"{self.user.username}: {self.content[:20]}..."  # Show only first 20 chars for preview
-    
+
 class Event(models.Model):
 
     class Status(models.TextChoices):
@@ -46,16 +46,15 @@ class Event(models.Model):
     group = models.ForeignKey(Group, related_name='events', on_delete=models.CASCADE)
     members = models.ManyToManyField(User, related_name='event_memberships')
     funds_transferred = models.BooleanField(default=False)
-
     def calculate_share(self):
-        members_count = self.group.members.count()
+        members_count = self.members.all().count()
         return 0 if members_count == 0 else self.total_spend / members_count
 
     def check_status(self, save=True):
         if self.status == self.Status.ARCHIVED:
             return self.status
         share = self.calculate_share()
-        for member in self.group.members.all():
+        for member in self.members.all():
             if member.profile.max_spend < share:
                 self.status = self.Status.PENDING
                 if save:

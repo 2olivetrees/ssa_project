@@ -12,6 +12,7 @@ class UserRegistrationForm(UserCreationForm):
     balance = forms.DecimalField(max_digits=10, decimal_places=2, required=False, initial=100.00)
 
     class Meta:
+
         model = User
         # include username so a separate username field appears in the form
         fields = ['username', 'email', 'password1', 'password2', 'first_name']
